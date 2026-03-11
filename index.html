@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#6C5CE7">
+  <title>Трекер привычек</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ===== MAIN SCREEN ===== -->
+    <div class="screen active" id="screen-main">
+      <header class="main-header">
+        <h1>Привычки</h1>
+        <button class="icon-btn" id="btn-settings" aria-label="Настройки">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </header>
+
+      <div class="points-bar">
+        <div class="points-display">
+          <span class="points-star">&#9733;</span>
+          <span class="points-value" id="total-points">0</span>
+          <span class="points-label">баллов</span>
+        </div>
+        <button class="btn-deduct" id="btn-deduct" title="Списать баллы">&minus;</button>
+      </div>
+
+      <div class="week-header" id="week-header"></div>
+      <div class="habit-list" id="habit-list">
+        <div class="empty-state" id="empty-state">
+          <p>Пока нет привычек</p>
+          <p class="hint">Нажмите + чтобы добавить первую</p>
+        </div>
+      </div>
+
+      <button class="fab" id="btn-add-habit">+</button>
+    </div>
+
+    <!-- ===== HABIT FORM SCREEN ===== -->
+    <div class="screen" id="screen-habit-form">
+      <header class="screen-header">
+        <button class="btn-back" data-screen="main" aria-label="Назад">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <h2 id="form-title">Новая привычка</h2>
+        <button class="icon-btn danger" id="btn-delete-habit" style="display:none" aria-label="Удалить">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </header>
+
+      <div class="form-content">
+        <div class="form-group">
+          <label>Название</label>
+          <input type="text" id="habit-name" placeholder="Например: Утренняя пробежка" autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label>Тип</label>
+          <div class="toggle-group" id="habit-type-group">
+            <button class="toggle active" data-value="positive">Позитивная</button>
+            <button class="toggle" data-value="negative">Негативная</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Категория</label>
+          <div class="category-chips" id="category-select"></div>
+        </div>
+
+        <div class="form-group">
+          <label>Баллы</label>
+          <input type="number" id="habit-points" value="10" min="1" max="1000">
+        </div>
+
+        <div class="form-group">
+          <label>Расписание</label>
+          <div class="day-select" id="day-select">
+            <button class="day-btn" data-day="1">Пн</button>
+            <button class="day-btn" data-day="2">Вт</button>
+            <button class="day-btn" data-day="3">Ср</button>
+            <button class="day-btn" data-day="4">Чт</button>
+            <button class="day-btn" data-day="5">Пт</button>
+            <button class="day-btn" data-day="6">Сб</button>
+            <button class="day-btn" data-day="7">Вс</button>
+          </div>
+          <p class="form-hint">Если ничего не выбрано — каждый день</p>
+        </div>
+
+        <div class="form-group">
+          <label>Уведомления</label>
+          <div class="notification-row">
+            <label class="switch">
+              <input type="checkbox" id="habit-notify">
+              <span class="slider"></span>
+            </label>
+            <input type="time" id="habit-notify-time" value="09:00">
+          </div>
+        </div>
+
+        <button class="btn-primary" id="btn-save-habit">Сохранить</button>
+      </div>
+    </div>
+
+    <!-- ===== HABIT DETAIL SCREEN ===== -->
+    <div class="screen" id="screen-habit-detail">
+      <header class="screen-header">
+        <button class="btn-back" data-screen="main" aria-label="Назад">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <h2 id="detail-title">Привычка</h2>
+        <button class="icon-btn" id="btn-edit-habit" aria-label="Редактировать">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+      </header>
+
+      <div class="detail-content">
+        <div class="detail-cards" id="detail-stats"></div>
+
+        <div class="detail-section">
+          <div class="section-header">
+            <h3>Месяц</h3>
+            <div class="month-nav">
+              <button class="nav-btn" id="month-prev">&lsaquo;</button>
+              <span id="month-label"></span>
+              <button class="nav-btn" id="month-next">&rsaquo;</button>
+            </div>
+          </div>
+          <div class="month-calendar" id="month-calendar"></div>
+        </div>
+
+        <div class="detail-section">
+          <h3>Год</h3>
+          <div class="year-chart" id="year-chart"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SETTINGS SCREEN ===== -->
+    <div class="screen" id="screen-settings">
+      <header class="screen-header">
+        <button class="btn-back" data-screen="main" aria-label="Назад">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <h2>Настройки</h2>
+        <span></span>
+      </header>
+
+      <div class="settings-content">
+        <div class="settings-section">
+          <h3>Категории</h3>
+          <div id="settings-categories"></div>
+          <button class="btn-secondary" id="btn-add-category">+ Добавить категорию</button>
+        </div>
+
+        <div class="settings-section">
+          <h3>Резервная копия</h3>
+          <button class="btn-secondary" id="btn-export">Экспортировать данные</button>
+          <button class="btn-secondary" id="btn-import">Импортировать данные</button>
+          <input type="file" id="import-file" accept=".json" style="display:none">
+        </div>
+
+        <div class="settings-section">
+          <h3>История списаний</h3>
+          <div id="deduction-history"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODALS ===== -->
+  <div class="modal-overlay" id="modal-deduction">
+    <div class="modal">
+      <h3>Списание баллов</h3>
+      <div class="form-group">
+        <label>Причина</label>
+        <input type="text" id="deduct-desc" placeholder="За что списать" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Количество баллов</label>
+        <input type="number" id="deduct-points" value="10" min="1">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="deduct-cancel">Отмена</button>
+        <button class="btn-primary small" id="deduct-save">Списать</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-category">
+    <div class="modal">
+      <h3 id="cat-modal-title">Новая категория</h3>
+      <div class="form-group">
+        <label>Название</label>
+        <input type="text" id="cat-name" placeholder="Название категории" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Цвет</label>
+        <div class="color-grid" id="cat-colors">
+          <div class="color-opt selected" data-color="#00B894"></div>
+          <div class="color-opt" data-color="#6C5CE7"></div>
+          <div class="color-opt" data-color="#0984E3"></div>
+          <div class="color-opt" data-color="#FF7675"></div>
+          <div class="color-opt" data-color="#FDCB6E"></div>
+          <div class="color-opt" data-color="#E84393"></div>
+          <div class="color-opt" data-color="#00CEC9"></div>
+          <div class="color-opt" data-color="#FF6348"></div>
+          <div class="color-opt" data-color="#636E72"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="cat-cancel">Отмена</button>
+        <button class="btn-danger" id="cat-delete" style="display:none">Удалить</button>
+        <button class="btn-primary small" id="cat-save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-confirm">
+    <div class="modal">
+      <p id="confirm-message">Вы уверены?</p>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="confirm-cancel">Отмена</button>
+        <button class="btn-danger" id="confirm-ok">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
