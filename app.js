@@ -497,6 +497,10 @@ function navigateTo(screenId, params) {
   }
   currentScreen = screenId;
 
+  // Show FAB only on main screen
+  const fab = document.getElementById('btn-add-habit');
+  if (fab) fab.style.display = screenId === 'main' ? '' : 'none';
+
   // Render the target screen
   if (screenId === 'main') renderMain();
   else if (screenId === 'habit-form') renderHabitForm(params);
