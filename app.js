@@ -52,13 +52,41 @@ const DAY_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 const Store = {
   _data: null,
+  _uid: null,
+  _docRef: null,
 
-  load() {
+  setUser(uid) {
+    this._uid = uid;
+    this._docRef = db.collection('users').doc(uid).collection('data').doc('main');
+  },
+
+  async load() {
+    if (!this._docRef) { this._data = this._default(); return; }
     try {
-      const raw = localStorage.getItem('habitTracker');
-      this._data = raw ? JSON.parse(raw) : null;
-    } catch { this._data = null; }
-    if (!this._data) this._data = this._default();
+      const snap = await this._docRef.get();
+      this._data = snap.exists ? snap.data() : null;
+    } catch (e) {
+      console.error('Firestore load error:', e);
+      this._data = null;
+    }
+    if (!this._data) {
+      // Try migrate from localStorage
+      try {
+        const raw = localStorage.getItem('habitTracker');
+        if (raw) {
+          const local = JSON.parse(raw);
+          if (local.habits && local.categories) {
+            this._data = local;
+            if (!this._data.deductions) this._data.deductions = [];
+            await this._docRef.set(this._data);
+            localStorage.removeItem('habitTracker');
+            return;
+          }
+        }
+      } catch {}
+      this._data = this._default();
+      await this._docRef.set(this._data);
+    }
     // Ensure structure
     if (!this._data.categories) this._data.categories = this._default().categories;
     if (!this._data.habits) this._data.habits = [];
@@ -66,7 +94,8 @@ const Store = {
   },
 
   save() {
-    localStorage.setItem('habitTracker', JSON.stringify(this._data));
+    if (!this._docRef) return;
+    this._docRef.set(this._data).catch(e => console.error('Firestore save error:', e));
   },
 
   _default() {
@@ -117,7 +146,9 @@ const Store = {
       categoryId: h.categoryId,
       type: h.type || 'positive',
       points: h.points || 10,
+      scheduleMode: h.scheduleMode || 'days',
       schedule: h.schedule || [],
+      weeklyTarget: h.weeklyTarget || 3,
       notifications: h.notifications || { enabled: false, time: '09:00' },
       completions: {},
       createdAt: today()
@@ -153,6 +184,26 @@ const Store = {
     const h = this.habit(habitId);
     if (!h) return 0;
     const now = new Date();
+
+    if (h.scheduleMode === 'weekly') {
+      let weeksMet = 0, totalWeeks = 0;
+      const currentMonday = getMonday(now);
+      for (let w = 0; w < 5; w++) {
+        const weekStart = new Date(currentMonday);
+        weekStart.setDate(currentMonday.getDate() - w * 7);
+        let count = 0;
+        for (let d = 0; d < 7; d++) {
+          const day = new Date(weekStart);
+          day.setDate(weekStart.getDate() + d);
+          if (day > now) break;
+          if (h.completions && h.completions[fmtDate(day)]) count++;
+        }
+        totalWeeks++;
+        if (count >= (h.weeklyTarget || 3)) weeksMet++;
+      }
+      return totalWeeks > 0 ? weeksMet / totalWeeks : 0;
+    }
+
     let scheduled = 0, done = 0;
     for (let i = 0; i < 30; i++) {
       const d = new Date(now);
@@ -170,8 +221,31 @@ const Store = {
   currentStreak(habitId) {
     const h = this.habit(habitId);
     if (!h) return 0;
-    let streak = 0;
     const now = new Date();
+
+    if (h.scheduleMode === 'weekly') {
+      let streak = 0;
+      const currentMonday = getMonday(now);
+      for (let w = 0; w < 52; w++) {
+        const weekStart = new Date(currentMonday);
+        weekStart.setDate(currentMonday.getDate() - w * 7);
+        let count = 0;
+        for (let d = 0; d < 7; d++) {
+          const day = new Date(weekStart);
+          day.setDate(weekStart.getDate() + d);
+          if (day > now) break;
+          if (h.completions && h.completions[fmtDate(day)]) count++;
+        }
+        if (count >= (h.weeklyTarget || 3)) {
+          streak++;
+        } else {
+          if (w > 0) break;
+        }
+      }
+      return streak;
+    }
+
+    let streak = 0;
     for (let i = 0; i < 365; i++) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
@@ -180,7 +254,7 @@ const Store = {
       if (h.completions && h.completions[fmtDate(d)]) {
         streak++;
       } else {
-        if (i > 0) break; // Allow today to be incomplete
+        if (i > 0) break;
       }
     }
     return streak;
@@ -274,9 +348,143 @@ const Notify = {
 };
 
 
+// === AUTH ===
+
+function firebaseErrorMessage(code) {
+  const map = {
+    'auth/email-already-in-use': 'Этот email уже зарегистрирован',
+    'auth/invalid-email': 'Некорректный email',
+    'auth/weak-password': 'Пароль должен быть не менее 6 символов',
+    'auth/user-not-found': 'Пользователь не найден',
+    'auth/wrong-password': 'Неверный пароль',
+    'auth/too-many-requests': 'Слишком много попыток. Попробуйте позже',
+    'auth/invalid-credential': 'Неверный email или пароль',
+  };
+  return map[code] || 'Произошла ошибка. Попробуйте ещё раз';
+}
+
+const Auth = {
+  currentUser: null,
+  isAdmin: false,
+
+  init() {
+    return new Promise((resolve) => {
+      auth.onAuthStateChanged(async (user) => {
+        if (user) {
+          Auth.currentUser = user;
+          Store.setUser(user.uid);
+
+          // Check admin status
+          const userDoc = await db.collection('users').doc(user.uid).get();
+          Auth.isAdmin = userDoc.exists && userDoc.data().isAdmin === true;
+
+          await Store.load();
+          navigateTo('main');
+
+          // Show/hide admin button
+          const adminSection = document.getElementById('admin-section');
+          if (adminSection) adminSection.style.display = Auth.isAdmin ? '' : 'none';
+        } else {
+          Auth.currentUser = null;
+          Auth.isAdmin = false;
+          navigateTo('auth');
+        }
+        resolve();
+      });
+    });
+  },
+
+  async register(email, password) {
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+
+    // Check if this is the first user (admin)
+    const usersSnap = await db.collection('users').get();
+    const isFirst = usersSnap.size === 1; // just created user doc doesn't exist yet, so check after
+
+    const isAdmin = usersSnap.empty;
+    await db.collection('users').doc(cred.user.uid).set({
+      email: email,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      isAdmin: isAdmin
+    });
+
+    // Set admin status directly (onAuthStateChanged may fire before doc is written)
+    Auth.isAdmin = isAdmin;
+    const adminSection = document.getElementById('admin-section');
+    if (adminSection) adminSection.style.display = isAdmin ? '' : 'none';
+
+    return cred.user;
+  },
+
+  async login(email, password) {
+    const cred = await auth.signInWithEmailAndPassword(email, password);
+    return cred.user;
+  },
+
+  async logout() {
+    await auth.signOut();
+  }
+};
+
+
+// === ADMIN PANEL ===
+
+async function renderAdminPanel() {
+  if (!Auth.isAdmin) return;
+  const el = document.getElementById('admin-user-list');
+  el.innerHTML = '<p style="color:var(--text2);font-size:14px;">Загрузка...</p>';
+
+  try {
+    const snap = await db.collection('users').get();
+    let html = '';
+    snap.forEach(doc => {
+      const u = doc.data();
+      const isSelf = doc.id === Auth.currentUser.uid;
+      const dateStr = u.createdAt?.toDate?.()?.toLocaleDateString?.('ru-RU') || '—';
+      html += `<div class="admin-user-row">
+        <div class="admin-user-info">
+          <div class="admin-user-email">${escHtml(u.email || '—')}${u.isAdmin ? ' (админ)' : ''}</div>
+          <div class="admin-user-meta">Регистрация: ${dateStr}</div>
+        </div>
+        ${!isSelf ? `<div class="admin-user-actions">
+          <button class="btn-small-danger" data-uid="${doc.id}" data-action="reset">Сбросить</button>
+          <button class="btn-small-danger" data-uid="${doc.id}" data-action="delete">Удалить</button>
+        </div>` : ''}
+      </div>`;
+    });
+    el.innerHTML = html || '<p style="color:var(--text2);font-size:14px;">Нет пользователей</p>';
+
+    el.querySelectorAll('[data-action="reset"]').forEach(btn => {
+      btn.addEventListener('click', () => adminResetUser(btn.dataset.uid));
+    });
+    el.querySelectorAll('[data-action="delete"]').forEach(btn => {
+      btn.addEventListener('click', () => adminDeleteUser(btn.dataset.uid));
+    });
+  } catch (e) {
+    el.innerHTML = '<p style="color:var(--negative);font-size:14px;">Ошибка загрузки</p>';
+    console.error('Admin panel error:', e);
+  }
+}
+
+function adminResetUser(uid) {
+  showConfirm('Сбросить все данные пользователя?', async () => {
+    await db.collection('users').doc(uid).collection('data').doc('main').delete();
+    renderAdminPanel();
+  });
+}
+
+function adminDeleteUser(uid) {
+  showConfirm('Удалить пользователя? Это действие необратимо.', async () => {
+    await db.collection('users').doc(uid).collection('data').doc('main').delete();
+    await db.collection('users').doc(uid).delete();
+    renderAdminPanel();
+  });
+}
+
+
 // === NAVIGATION ===
 
-let currentScreen = 'main';
+let currentScreen = 'auth';
 const screenParams = {};
 
 function navigateTo(screenId, params) {
@@ -294,6 +502,7 @@ function navigateTo(screenId, params) {
   else if (screenId === 'habit-form') renderHabitForm(params);
   else if (screenId === 'habit-detail') renderHabitDetail(params);
   else if (screenId === 'settings') renderSettings();
+  else if (screenId === 'admin') renderAdminPanel();
 }
 
 
@@ -382,7 +591,7 @@ function buildHabitRow(habit, monday, todayStr, now) {
     d.setDate(monday.getDate() + i);
     const ds = fmtDate(d);
     const dow = dayOfWeek(d);
-    const scheduled = habit.schedule.length === 0 || habit.schedule.includes(dow);
+    const scheduled = habit.scheduleMode === 'weekly' || habit.schedule.length === 0 || habit.schedule.includes(dow);
     const completed = habit.completions && habit.completions[ds];
     const isFuture = ds > todayStr;
 
@@ -456,6 +665,15 @@ function renderHabitForm(params) {
       btn.classList.toggle('active', btn.dataset.value === h.type);
     });
 
+    // Schedule mode
+    const mode = h.scheduleMode || 'days';
+    document.querySelectorAll('#schedule-mode-group .toggle').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.value === mode);
+    });
+    document.getElementById('schedule-days-group').style.display = mode === 'days' ? '' : 'none';
+    document.getElementById('schedule-weekly-group').style.display = mode === 'weekly' ? '' : 'none';
+    document.getElementById('habit-weekly-target').value = h.weeklyTarget || 3;
+
     // Days
     document.querySelectorAll('#day-select .day-btn').forEach(btn => {
       btn.classList.toggle('selected', (h.schedule || []).includes(Number(btn.dataset.day)));
@@ -470,6 +688,13 @@ function renderHabitForm(params) {
     document.querySelectorAll('#habit-type-group .toggle').forEach((btn, i) => {
       btn.classList.toggle('active', i === 0);
     });
+    // Schedule mode default
+    document.querySelectorAll('#schedule-mode-group .toggle').forEach((btn, i) => {
+      btn.classList.toggle('active', i === 0);
+    });
+    document.getElementById('schedule-days-group').style.display = '';
+    document.getElementById('schedule-weekly-group').style.display = 'none';
+    document.getElementById('habit-weekly-target').value = 3;
     document.querySelectorAll('#day-select .day-btn').forEach(btn => btn.classList.remove('selected'));
     renderFormCategories(Store.categories()[0]?.id);
   }
@@ -506,15 +731,19 @@ function saveHabit() {
   const type = document.querySelector('#habit-type-group .toggle.active')?.dataset.value || 'positive';
   const categoryId = document.querySelector('#category-select .cat-chip.selected')?.dataset.catId || '';
   const points = Math.max(1, parseInt(document.getElementById('habit-points').value) || 10);
+  const scheduleMode = document.querySelector('#schedule-mode-group .toggle.active')?.dataset.value || 'days';
   const schedule = [];
-  document.querySelectorAll('#day-select .day-btn.selected').forEach(btn => {
-    schedule.push(Number(btn.dataset.day));
-  });
+  if (scheduleMode === 'days') {
+    document.querySelectorAll('#day-select .day-btn.selected').forEach(btn => {
+      schedule.push(Number(btn.dataset.day));
+    });
+  }
+  const weeklyTarget = Math.max(1, Math.min(7, parseInt(document.getElementById('habit-weekly-target').value) || 3));
   const notifyEnabled = document.getElementById('habit-notify').checked;
   const notifyTime = document.getElementById('habit-notify-time').value || '09:00';
 
   const data = {
-    name, type, categoryId, points, schedule,
+    name, type, categoryId, points, scheduleMode, schedule, weeklyTarget,
     notifications: { enabled: notifyEnabled, time: notifyTime }
   };
 
@@ -572,7 +801,7 @@ function renderDetailStats(h) {
     </div>
     <div class="stat-card">
       <div class="stat-value">${streak}</div>
-      <div class="stat-label">Текущая серия (дни)</div>
+      <div class="stat-label">Текущая серия (${h.scheduleMode === 'weekly' ? 'недели' : 'дни'})</div>
     </div>
     <div class="stat-card">
       <div class="stat-value">${totalCompletions}</div>
@@ -608,7 +837,7 @@ function renderDetailMonth(h) {
     const d = new Date(month.getFullYear(), month.getMonth(), day);
     const ds = fmtDate(d);
     const dow = dayOfWeek(d);
-    const scheduled = h.schedule.length === 0 || h.schedule.includes(dow);
+    const scheduled = h.scheduleMode === 'weekly' || h.schedule.length === 0 || h.schedule.includes(dow);
     const completed = h.completions && h.completions[ds];
     const isToday = ds === todayStr;
 
@@ -639,7 +868,7 @@ function renderDetailYear(h) {
       const date = new Date(year, m, d);
       if (date > now) break;
       const dow = dayOfWeek(date);
-      if (h.schedule.length === 0 || h.schedule.includes(dow)) {
+      if (h.scheduleMode === 'weekly' || h.schedule.length === 0 || h.schedule.includes(dow)) {
         scheduled++;
         if (h.completions && h.completions[fmtDate(date)]) completed++;
       }
@@ -852,7 +1081,10 @@ function setupEvents() {
 
   // Back buttons
   document.querySelectorAll('.btn-back').forEach(btn => {
-    btn.addEventListener('click', () => navigateTo('main'));
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.screen || 'main';
+      navigateTo(target);
+    });
   });
 
   // Habit form
@@ -864,6 +1096,17 @@ function setupEvents() {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#habit-type-group .toggle').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+    });
+  });
+
+  // Schedule mode toggle
+  document.querySelectorAll('#schedule-mode-group .toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#schedule-mode-group .toggle').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const mode = btn.dataset.value;
+      document.getElementById('schedule-days-group').style.display = mode === 'days' ? '' : 'none';
+      document.getElementById('schedule-weekly-group').style.display = mode === 'weekly' ? '' : 'none';
     });
   });
 
@@ -934,25 +1177,73 @@ function setupEvents() {
       }
     });
   });
+
+  // Auth events
+  document.getElementById('btn-login').addEventListener('click', async () => {
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const errEl = document.getElementById('auth-error');
+    errEl.style.display = 'none';
+    try {
+      await Auth.login(email, password);
+    } catch (e) {
+      errEl.textContent = firebaseErrorMessage(e.code);
+      errEl.style.display = '';
+    }
+  });
+
+  document.getElementById('btn-register').addEventListener('click', async () => {
+    const email = document.getElementById('reg-email').value.trim();
+    const pw1 = document.getElementById('reg-password').value;
+    const pw2 = document.getElementById('reg-password2').value;
+    const errEl = document.getElementById('reg-error');
+    errEl.style.display = 'none';
+    if (pw1 !== pw2) { errEl.textContent = 'Пароли не совпадают'; errEl.style.display = ''; return; }
+    try {
+      await Auth.register(email, pw1);
+    } catch (e) {
+      errEl.textContent = firebaseErrorMessage(e.code);
+      errEl.style.display = '';
+    }
+  });
+
+  document.getElementById('link-to-register').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('auth-login-form').style.display = 'none';
+    document.getElementById('auth-register-form').style.display = '';
+  });
+
+  document.getElementById('link-to-login').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('auth-register-form').style.display = 'none';
+    document.getElementById('auth-login-form').style.display = '';
+  });
+
+  // Logout
+  document.getElementById('btn-logout').addEventListener('click', () => Auth.logout());
+
+  // Admin panel
+  const btnAdmin = document.getElementById('btn-admin-panel');
+  if (btnAdmin) btnAdmin.addEventListener('click', () => navigateTo('admin'));
 }
 
 
 // === INIT ===
 
 document.addEventListener('DOMContentLoaded', async () => {
-  Store.load();
-
   // Skip animation for initial screen
-  const mainScreen = document.getElementById('screen-main');
-  mainScreen.classList.add('no-transition');
+  const authScreen = document.getElementById('screen-auth');
+  authScreen.classList.add('no-transition');
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      mainScreen.classList.remove('no-transition');
+      authScreen.classList.remove('no-transition');
     });
   });
 
   setupEvents();
-  renderMain();
+
+  // Auth will trigger navigation to main or stay on auth
+  await Auth.init();
 
   // Register SW
   if ('serviceWorker' in navigator) {
@@ -964,6 +1255,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Init notifications if any habit uses them
-  const hasNotifications = Store.habits().some(h => h.notifications?.enabled);
-  if (hasNotifications) Notify.init();
+  if (Store._data) {
+    const hasNotifications = Store.habits().some(h => h.notifications?.enabled);
+    if (hasNotifications) Notify.init();
+  }
 });
