@@ -506,23 +506,6 @@ html, body {
   border-color: var(--primary);
 }
 
-/* Notification row */
-.notification-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.notification-row input[type="time"] {
-  padding: 10px 14px;
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  font-size: 16px;
-  background: var(--card);
-  color: var(--text);
-  -webkit-appearance: none;
-}
-
 /* Switch */
 .switch {
   position: relative;

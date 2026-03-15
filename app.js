@@ -149,7 +149,6 @@ const Store = {
       scheduleMode: h.scheduleMode || 'days',
       schedule: h.schedule || [],
       weeklyTarget: h.weeklyTarget || 3,
-      notifications: h.notifications || { enabled: false, time: '09:00' },
       completions: {},
       createdAt: today()
     };
@@ -302,50 +301,6 @@ const Store = {
 
 // === NOTIFICATIONS ===
 
-const Notify = {
-  _interval: null,
-  _lastCheck: '',
-
-  async init() {
-    if (!('Notification' in window)) return;
-    if (Notification.permission === 'default') {
-      await Notification.requestPermission();
-    }
-    this.start();
-  },
-
-  start() {
-    if (this._interval) clearInterval(this._interval);
-    this._interval = setInterval(() => this.check(), 30000);
-    this.check();
-  },
-
-  check() {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-
-    const now = new Date();
-    const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-    const checkKey = today() + '_' + timeStr;
-    if (this._lastCheck === checkKey) return;
-    this._lastCheck = checkKey;
-
-    const dow = dayOfWeek(now);
-    const todayStr = today();
-
-    for (const h of Store.habits()) {
-      if (!h.notifications || !h.notifications.enabled) continue;
-      if (h.notifications.time !== timeStr) continue;
-      if (h.schedule.length > 0 && !h.schedule.includes(dow)) continue;
-      if (h.completions && h.completions[todayStr]) continue;
-
-      new Notification('Трекер привычек', {
-        body: h.name,
-        icon: 'icon.svg',
-        tag: h.id
-      });
-    }
-  }
-};
 
 
 // === AUTH ===
@@ -661,9 +616,6 @@ function renderHabitForm(params) {
     if (!h) { navigateTo('main'); return; }
     document.getElementById('habit-name').value = h.name;
     document.getElementById('habit-points').value = h.points;
-    document.getElementById('habit-notify').checked = h.notifications?.enabled || false;
-    document.getElementById('habit-notify-time').value = h.notifications?.time || '09:00';
-
     // Type
     document.querySelectorAll('#habit-type-group .toggle').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.value === h.type);
@@ -687,8 +639,6 @@ function renderHabitForm(params) {
   } else {
     document.getElementById('habit-name').value = '';
     document.getElementById('habit-points').value = 10;
-    document.getElementById('habit-notify').checked = false;
-    document.getElementById('habit-notify-time').value = '09:00';
     document.querySelectorAll('#habit-type-group .toggle').forEach((btn, i) => {
       btn.classList.toggle('active', i === 0);
     });
@@ -743,12 +693,8 @@ function saveHabit() {
     });
   }
   const weeklyTarget = Math.max(1, Math.min(7, parseInt(document.getElementById('habit-weekly-target').value) || 3));
-  const notifyEnabled = document.getElementById('habit-notify').checked;
-  const notifyTime = document.getElementById('habit-notify-time').value || '09:00';
-
   const data = {
-    name, type, categoryId, points, scheduleMode, schedule, weeklyTarget,
-    notifications: { enabled: notifyEnabled, time: notifyTime }
+    name, type, categoryId, points, scheduleMode, schedule, weeklyTarget
   };
 
   if (editingHabitId) {
@@ -757,7 +703,6 @@ function saveHabit() {
     Store.addHabit(data);
   }
 
-  if (notifyEnabled) Notify.init();
   navigateTo('main');
 }
 
@@ -1119,11 +1064,6 @@ function setupEvents() {
     btn.addEventListener('click', () => btn.classList.toggle('selected'));
   });
 
-  // Notification toggle
-  document.getElementById('habit-notify').addEventListener('change', function () {
-    if (this.checked) Notify.init();
-  });
-
   // Habit detail
   document.getElementById('btn-edit-habit').addEventListener('click', () => {
     if (detailHabitId) navigateTo('habit-form', { habitId: detailHabitId });
@@ -1258,9 +1198,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Init notifications if any habit uses them
-  if (Store._data) {
-    const hasNotifications = Store.habits().some(h => h.notifications?.enabled);
-    if (hasNotifications) Notify.init();
-  }
 });
