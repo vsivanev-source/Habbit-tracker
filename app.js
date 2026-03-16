@@ -467,6 +467,14 @@ function navigateTo(screenId, params) {
 
 // === MAIN SCREEN ===
 
+let weekOffset = 0;
+
+function getDisplayedMonday() {
+  const monday = getMonday(new Date());
+  monday.setDate(monday.getDate() + weekOffset * 7);
+  return monday;
+}
+
 function renderMain() {
   renderPoints();
   renderWeekHeader();
@@ -480,11 +488,11 @@ function renderPoints() {
 
 function renderWeekHeader() {
   const el = document.getElementById('week-header');
-  const now = new Date();
-  const monday = getMonday(now);
+  const monday = getDisplayedMonday();
   const todayStr = today();
 
-  let html = '<div class="week-spacer"></div>';
+  let html = '<button class="week-nav" id="week-prev" aria-label="Предыдущая неделя">‹</button>';
+  html += '<div class="week-spacer"></div>';
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
@@ -494,7 +502,11 @@ function renderWeekHeader() {
       <span class="week-day-num">${d.getDate()}</span>
     </div>`;
   }
+  html += `<button class="week-nav${weekOffset >= 0 ? ' hidden' : ''}" id="week-next" aria-label="Следующая неделя">›</button>`;
   el.innerHTML = html;
+
+  document.getElementById('week-prev').addEventListener('click', () => { weekOffset--; renderMain(); });
+  document.getElementById('week-next').addEventListener('click', () => { if (weekOffset < 0) { weekOffset++; renderMain(); } });
 }
 
 function renderHabitList() {
@@ -508,7 +520,7 @@ function renderHabitList() {
 
   const now = new Date();
   const todayStr = today();
-  const monday = getMonday(now);
+  const monday = getDisplayedMonday();
 
   // Sort: positive first, then negative
   const sorted = [...habits].sort((a, b) => {
@@ -578,12 +590,14 @@ function buildHabitRow(habit, monday, todayStr, now) {
   }
 
   return `<div class="habit-row">
+    <div class="row-nav-spacer"></div>
     <div class="habit-info" data-habit-id="${habit.id}">
       <div class="category-dot" style="width:${size}px;height:${size}px;background:${cat?.color || '#999'}"></div>
       <span class="habit-name">${escHtml(habit.name)}</span>
       <span class="habit-pts ${habit.type}">${habit.type === 'positive' ? '+' : '−'}${habit.points}</span>
     </div>
     ${daysHtml}
+    <div class="row-nav-spacer"></div>
   </div>`;
 }
 
