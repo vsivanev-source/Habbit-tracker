@@ -590,14 +590,12 @@ function buildHabitRow(habit, monday, todayStr, now) {
   }
 
   return `<div class="habit-row">
-    <div class="row-nav-spacer"></div>
     <div class="habit-info" data-habit-id="${habit.id}">
       <div class="category-dot" style="width:${size}px;height:${size}px;background:${cat?.color || '#999'}"></div>
       <span class="habit-name">${escHtml(habit.name)}</span>
       <span class="habit-pts ${habit.type}">${habit.type === 'positive' ? '+' : '−'}${habit.points}</span>
     </div>
     ${daysHtml}
-    <div class="row-nav-spacer"></div>
   </div>`;
 }
 

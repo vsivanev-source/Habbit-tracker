@@ -252,15 +252,19 @@ html, body {
 /* === WEEK HEADER === */
 .week-header {
   display: grid;
-  grid-template-columns: 28px 1fr repeat(7, 34px) 28px;
+  grid-template-columns: 1fr repeat(7, 34px);
   gap: 3px;
   padding: 14px 16px 6px;
   align-items: center;
+  position: relative;
 }
 
 .week-spacer { min-width: 0; }
 
 .week-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -274,11 +278,12 @@ html, body {
   padding: 0;
   border-radius: 50%;
   -webkit-tap-highlight-color: transparent;
+  z-index: 1;
 }
 .week-nav:active { background: var(--border); }
 .week-nav.hidden { visibility: hidden; }
-
-.row-nav-spacer { width: 28px; }
+#week-prev { left: -6px; }
+#week-next { right: -6px; }
 
 .week-day {
   text-align: center;
@@ -320,7 +325,7 @@ html, body {
 
 .habit-row {
   display: grid;
-  grid-template-columns: 28px 1fr repeat(7, 34px) 28px;
+  grid-template-columns: 1fr repeat(7, 34px);
   gap: 3px;
   align-items: center;
   padding: 10px 0;
