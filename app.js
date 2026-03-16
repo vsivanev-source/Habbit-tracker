@@ -491,7 +491,9 @@ function renderWeekHeader() {
   const monday = getDisplayedMonday();
   const todayStr = today();
 
-  let html = '<button class="week-nav" id="week-prev" aria-label="Предыдущая неделя">‹</button>';
+  const arrow = weekOffset < 0 ? '›' : '‹';
+  const label = weekOffset < 0 ? 'Текущая неделя' : 'Предыдущая неделя';
+  let html = `<button class="week-nav" id="week-toggle" aria-label="${label}">${arrow}</button>`;
   html += '<div class="week-spacer"></div>';
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday);
@@ -502,11 +504,12 @@ function renderWeekHeader() {
       <span class="week-day-num">${d.getDate()}</span>
     </div>`;
   }
-  html += `<button class="week-nav${weekOffset >= 0 ? ' hidden' : ''}" id="week-next" aria-label="Следующая неделя">›</button>`;
   el.innerHTML = html;
 
-  document.getElementById('week-prev').addEventListener('click', () => { weekOffset--; renderMain(); });
-  document.getElementById('week-next').addEventListener('click', () => { if (weekOffset < 0) { weekOffset++; renderMain(); } });
+  document.getElementById('week-toggle').addEventListener('click', () => {
+    weekOffset = weekOffset < 0 ? 0 : -1;
+    renderMain();
+  });
 }
 
 function renderHabitList() {
@@ -590,6 +593,7 @@ function buildHabitRow(habit, monday, todayStr, now) {
   }
 
   return `<div class="habit-row">
+    <div></div>
     <div class="habit-info" data-habit-id="${habit.id}">
       <div class="category-dot" style="width:${size}px;height:${size}px;background:${cat?.color || '#999'}"></div>
       <span class="habit-name">${escHtml(habit.name)}</span>

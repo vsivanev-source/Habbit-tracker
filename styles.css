@@ -252,38 +252,30 @@ html, body {
 /* === WEEK HEADER === */
 .week-header {
   display: grid;
-  grid-template-columns: 1fr repeat(7, 34px);
-  gap: 3px;
+  grid-template-columns: 24px 1fr repeat(7, 30px);
+  gap: 2px;
   padding: 14px 16px 6px;
   align-items: center;
-  position: relative;
 }
 
 .week-spacer { min-width: 0; }
 
 .week-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: none;
-  font-size: 20px;
+  font-size: 18px;
   color: var(--text2);
   cursor: pointer;
   padding: 0;
   border-radius: 50%;
   -webkit-tap-highlight-color: transparent;
-  z-index: 1;
 }
 .week-nav:active { background: var(--border); }
-.week-nav.hidden { visibility: hidden; }
-#week-prev { left: -6px; }
-#week-next { right: -6px; }
 
 .week-day {
   text-align: center;
@@ -303,9 +295,9 @@ html, body {
   background: var(--primary);
   color: #fff;
   border-radius: 50%;
-  width: 22px;
-  height: 22px;
-  line-height: 22px;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
   margin: 0 auto;
 }
 
@@ -325,8 +317,8 @@ html, body {
 
 .habit-row {
   display: grid;
-  grid-template-columns: 1fr repeat(7, 34px);
-  gap: 3px;
+  grid-template-columns: 24px 1fr repeat(7, 30px);
+  gap: 2px;
   align-items: center;
   padding: 10px 0;
   border-bottom: 1px solid var(--border);
@@ -377,8 +369,8 @@ html, body {
 .habit-pts.negative { background: #FDEDEC; color: var(--negative); }
 
 .day-cell {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
