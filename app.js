@@ -174,7 +174,8 @@ const Store = {
     if (h.completions[dateStr]) {
       delete h.completions[dateStr];
     } else {
-      h.completions[dateStr] = true;
+      // Store points at the time of completion
+      h.completions[dateStr] = { points: h.points };
     }
     this.save();
   },
@@ -263,9 +264,14 @@ const Store = {
   totalPoints() {
     let total = 0;
     for (const h of this._data.habits) {
-      const count = Object.keys(h.completions || {}).length;
-      if (h.type === 'positive') total += count * h.points;
-      else total -= count * h.points;
+      const completions = h.completions || {};
+      for (const dateStr of Object.keys(completions)) {
+        const entry = completions[dateStr];
+        // Support old format (true) and new format ({ points: N })
+        const pts = (entry && typeof entry === 'object') ? entry.points : h.points;
+        if (h.type === 'positive') total += pts;
+        else total -= pts;
+      }
     }
     for (const d of this._data.deductions) {
       total -= d.points;
@@ -755,8 +761,15 @@ function renderDetailStats(h) {
   const el = document.getElementById('detail-stats');
   const rate = Store.completionRate(h.id);
   const streak = Store.currentStreak(h.id);
-  const totalCompletions = Object.keys(h.completions || {}).length;
-  const totalPts = totalCompletions * h.points * (h.type === 'positive' ? 1 : -1);
+  const completions = h.completions || {};
+  const totalCompletions = Object.keys(completions).length;
+  let totalPts = 0;
+  for (const ds of Object.keys(completions)) {
+    const entry = completions[ds];
+    const pts = (entry && typeof entry === 'object') ? entry.points : h.points;
+    totalPts += pts;
+  }
+  if (h.type !== 'positive') totalPts = -totalPts;
   const cat = Store.category(h.categoryId);
 
   el.innerHTML = `
