@@ -91,6 +91,19 @@ const Store = {
     if (!this._data.categories) this._data.categories = this._default().categories;
     if (!this._data.habits) this._data.habits = [];
     if (!this._data.deductions) this._data.deductions = [];
+
+    // Migrate old completions: true → { points: N }
+    let migrated = false;
+    for (const h of this._data.habits) {
+      if (!h.completions) continue;
+      for (const ds of Object.keys(h.completions)) {
+        if (h.completions[ds] === true) {
+          h.completions[ds] = { points: h.points };
+          migrated = true;
+        }
+      }
+    }
+    if (migrated) this.save();
   },
 
   save() {
